@@ -1,0 +1,58 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract PayU {
+    address public owner;
+
+    struct Recipient {
+        address wallet;
+        uint256 percentage; // multiplied by 100, e.g., 12.5% = 1250
+    }
+
+    Recipient[] private _recipients;
+    uint256 public totalPercentage;
+
+    constructor() {
+        owner = msg.sender;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner can call this function.");
+        _;
+    }
+
+    function setRecipients(address[] calldata wallets, uint256[] calldata percentages) external onlyOwner {
+        require(wallets.length == percentages.length, "Mismatched inputs.");
+
+        delete _recipients;
+        totalPercentage = 0;
+
+        for (uint256 i = 0; i < wallets.length; i++) {
+            require(wallets[i] != address(0), "Invalid address.");
+            require(percentages[i] > 0, "Percentage must be > 0.");
+            _recipients.push(Recipient({wallet: wallets[i], percentage: percentages[i]}));
+            totalPercentage += percentages[i];
+        }
+
+        require(totalPercentage == 10000, "Total must equal 10000 (100%).");
+    }
+
+    receive() external payable {
+        require(totalPercentage == 10000, "Recipients not set.");
+        require(msg.value > 0, "No ETH sent.");
+
+        for (uint256 i = 0; i < _recipients.length; i++) {
+            uint256 amount = (msg.value * _recipients[i].percentage) / 10000;
+            (bool sent, ) = _recipients[i].wallet.call{value: amount}("");
+            require(sent, "Transfer failed");
+        }
+    }
+
+    function getRecipients() external view returns (Recipient[] memory) {
+        return _recipients;
+    }
+
+    function getRecipientCount() external view returns (uint256) {
+        return _recipients.length;
+    }
+}
